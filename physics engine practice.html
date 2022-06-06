@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8"/>
+        <meta http-equiv="X-UA=Compatible" content="IE-edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Physics playground</title>
+        <link rel="stylesheet" href="style.css">
+    </head>
+    <body>
+        <h1>Physics playground</h1>
+        <canvas id="canvas" width="600" height="600"></canvas>
+        <script>
+            const canvas = document.getElementById("canvas");
+            const ctx = canvas.getContext("2d");
+
+            let cannonSfx = new Audio("/Users/mine/VScode-workspace/practiceHTMLgame/cannon-shot-14799.mp3")
+
+            let cannonTop = new Image()
+            cannonTop.src="/Users/mine/VScode-workspace/practiceHTMLgame/cannon.png"
+            cannonTop.onload = renderImages;
+
+            let mousePos = null
+            let angle = null
+            let canShoot = true
+
+            // Global fx
+            let imgCount = 1;
+            function renderImages() {
+                if (--imgCount>0) {
+                    return
+                }
+                animate()
+            }
+
+            // instantiate cannonballs at correct muzzle position
+            function startBallAt(x,y) {
+                let cannonAngle = angle
+                // find dist from rotation pt to muzzle
+                let dx = x - (cannon.x + 15)
+                let dy = y - (cannon.y - 50)
+                let distance = Math.sqrt(dx*dx + dy*dy)
+                let originalAngle = Math.atan2(dy,dx)
+                // calc new coords
+                let newX = (cannon.x + 15) + distance * Math.cos(originalAngle + cannonAngle)
+                let newY = (cannon.y - 50) + distance * Math.sin(originalAngle + cannonAngle)
+
+                return {
+                    x: newX,
+                    y: newY
+                }
+            }
+
+            var borderWidth = canvas.width * 0.03;
+            function drawBorder() {
+                ctx.fillStyle = "grey";
+                ctx.fillRect(0,0,canvas.width,canvas.height);
+                ctx.clearRect(borderWidth,borderWidth,canvas.width - (2* borderWidth),canvas.width - (2* borderWidth));
+            }
+
+            class Cannon {
+                constructor(x,y) {
+                    this.x=x;
+                    this.y=y;
+                    this.topX = x-20
+                    this.topY = y-95
+                }
+
+                stand() {
+                    ctx.beginPath();
+                    ctx.moveTo(this.x, this.y)
+                    ctx.lineTo(this.x+15, this.y-50)
+                    ctx.lineTo(this.x+30, this.y)
+                    ctx.stroke()
+                }
+
+                rotateTop() {
+                    if (mousePos) {
+                        angle = Math.atan2(mousePos.y -
+                            (this.y-50), mousePos.x -
+                            (this.x+15)
+                        )
+                        // move rotation point to top of stand
+                        ctx.translate((this.x+15), (this.y-50))
+                        ctx.rotate(angle)
+                        // move rotation point back to upper left corner
+                        ctx.translate(-(this.x+15), -(this.y-50))
+                    }
+                }
+
+                draw() {
+                    // Draw stand first
+                    this.stand()
+                    ctx.save()
+                    // Draw cannon
+                    this.rotateTop()
+                    ctx.drawImage(cannonTop, this.topX, this.topY, 100, 50)
+                }
+            }
+
+            let cannon = new Cannon(borderWidth + 50, canvas.height - borderWidth)
+
+            class CannonBall {
+                constructor(angle, x, y) {
+                    this.radius = 15
+                    this.mass = this.radius
+                    this.angle = angle
+                    // starting pos
+                    this.x = x
+                    this.y = y
+                    // movement vars
+                    this.dx = Math.cos(angle) * 7
+                    this.dy = Math.sin(angle) * 7
+                }
+
+                move() {
+                    this.x += this.dx
+                    this.y += this.dy
+                }
+
+                draw() {
+                    ctx.fillStyle = "black"
+                    ctx.beginPath()
+                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2)
+                    ctx.fill()
+                }
+            }
+
+            let cannonBalls = []
+
+            function ballHitWall(ball) {
+                // did we hit the border?
+                if (ball.x + ball.radius > canvas.width - borderWidth || // right
+                    ball.x - ball.radius < borderWidth || // left
+                    ball.y + ball.radius > canvas.height - borderWidth || // bottom
+                    ball.y - ball.radius < borderWidth // top
+                ) {
+                    // handle bounces
+                    if (ball.x + ball.radius > canvas.width - borderWidth) {
+                        // reset ball to be inside border
+                        ball.x = (canvas.width - borderWidth) - ball.radius
+                        // bounce it
+                        ball.dx *= -1
+                    } else if (ball.x - ball.radius < borderWidth) {
+                        ball.x = borderWidth + ball.radius
+                        ball.dx = *= -1
+                    } else if (ball.y + ball.radius > canvas.height - borderWidth) {
+                        ball.y = (canvas.height - borderWidth) - ball.radius
+                        ball.dy *= -1
+                    } else if (ball.y - ball.radius < borderWidth) {
+                        ball.y = borderWidth + ball.radius
+                        ball.dy *= -1
+                    }
+                    
+                }
+            }
+
+            function animate() {
+                requestAnimationFrame(animate);
+                ctx.clearRect(0,0,canvas.width,canvas.height);
+                drawBorder();
+                cannon.draw()
+                ctx.restore()
+                // shoot
+                cannonBalls.forEach(ball => {
+                    ball.move()
+                    ball.draw()
+                })
+            }
+
+            // Mouse movement
+            canvas.addEventListener("mousemove", e => {
+                mousePos = {
+                    x: e.clientX - canvas.offsetLeft,
+                    y: e.clientY - canvas.offsetTop
+                }
+            })
+
+            canvas.addEventListener("click", e => {
+                // guard clause so we don't shoot ourselves in the foot
+                if (angle < -2 || angle > 0.5) {
+                    return
+                }
+
+                // check if we're still reloading
+                if (!canShoot) {
+                    return
+                }
+                canShoot = false
+
+                let ballPos = startBallAt(cannon.topX + 100, cannon.topY + 30)
+
+                cannonBalls.push(
+                    new CannonBall(angle, ballPos.x, ballPos.y)
+                )
+
+                cannonSfx.currentTime = 0.0
+                cannonSfx.play()
+
+                // Reload timer
+                setTimeout(() => {
+                    canShoot = true
+                }, 1000)
+            })
+        </script>
+    </body>
+</html>
